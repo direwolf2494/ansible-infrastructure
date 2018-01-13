@@ -1,0 +1,33 @@
+---
+# tasks file for task
+
+# create task definition for the app
+- name: Create task definition
+  ecs_taskdefinition:
+    containers:
+    - name: es
+      cpu: 100
+      essential: true
+      image: "elasticsearch"
+      memory: 262144000
+    - name: web
+      image: "shervain/foodtrucks:{{ lookup('env', 'TAG' }} }}"
+      cpu: 100
+      essential: true
+      memory: 262144000
+      portMappings:
+      - containerPort: 5000
+        hostPort: 80
+    family: qdd-foodtrucks-tasks
+    state: present
+    region: us-east-2
+  register: task_def
+
+- name: Run the Task
+  ecs_task:
+    operation: run
+    cluster: "{{ cluster_name }}"
+    task_definition: qdd-foodtrucks-tasks
+    count: 1
+    started_by: ci-server
+  register: task_output

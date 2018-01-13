@@ -1,0 +1,50 @@
+---
+cluster_name: "qdd-production-cluster"
+min_size: '2'
+max_size: '4'
+desired_capacity: '2'
+key_name: 'qdd-production-key'
+key_path: "{{ lookup('env', 'HOME')/.ssh/{{ key_name }}.pem }}"
+availability_zones: &az us-east-2a
+everywhere_cidr: &ec '0.0.0.0/0'
+qdd_vpc:
+  name: 'qdd-production-vpc'
+  region: 'us-east-2'
+  cidr: '172.40.0.0/16'
+  subnets:
+    - cidr: &cidr 172.16.0.0/24
+      az: *az
+  routes:
+    - subnets:
+      - *cidr
+    - routes:
+      - dest: *ec
+        gw: igw
+  security_group:
+    outbound:
+      - sg_name: qdd-prod-outbound-all
+        sg_description: allows outbound traffic to any IP address
+        sg_rules:
+          - proto: all
+            cidr_ip: *cidr
+    inbound:
+      - sg_name: qdd-prod-inbound-web
+        sg_description: Allow http and https access (public)
+        sg_rules:
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: *ec
+          - proto: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: *ec
+      - sg_name: qdd-prod-inbound-ssh
+        sg_description: allow ssh access
+        sg_rules:
+         - proto: tcp
+           from_port: 22
+           to_port: 22
+           cidr_ip: "{{ ci_server_vpc }}"
+    security_groups_files: 'internal-prod-securitygroups.yml'
+

@@ -1,0 +1,87 @@
+---
+
+  # Load variables for staging environment
+  - name: Load Staging Variables
+    include_vars:
+      file: staging.yml
+    when: environ == "staging"
+
+  # Load variables for production environment
+  - name: Load Production Variables
+    include_vars:
+      file: production.yml
+    when: environ == "prod"
+
+  - set_fact:
+      cluster_name: "{{ cluster_name }}"
+
+  - name: Check if key file exists
+    stat:
+      path: /etc/file.txt
+    register: stat_result
+
+  - name: Creating ec2 key
+    ec2_key:
+      name: "{{ key_name }}"
+      region: "{{ qdd_vpc.region }}"
+  register: key
+  when: stat_result.stat.exists == False 
+
+  # store the private key on host computer
+  - name: Saving Private Key
+    copy:
+      content: "{{ key.key.private_key }}"
+      dest: "{{ key_path }}"
+      mode: 0400
+    when: stat_result.stat.exists == False
+
+  # create ecsInstanceRole
+  - name: Create ECS Role
+    iam_role:
+      name: ecsInstanceRole
+      assume_role_policy_document: "{{ lookup('file','policy.json') }}"
+      state: present
+      managed_policy:
+      - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+
+# tasks file for cluster
+  - name: Provision Networking
+    import_role: 
+      name: daniel-rhoades.aws-qdd_vpc
+    vars:
+      vpc_name: "{{ qdd_vpc.name }}",
+      vpc_region: "{{ qdd_vpc.region }}",
+      vpc_cidr_block: "{{ qdd_vpc.subnets[0].cidr }}",
+      vpc_subnets: "{{ qdd_vpc.subnets }}",
+      public_subnet_routes: "{{ qdd_vpc.routes }}"
+
+    # Provision security groups
+  - name: Provision Security
+      import_role: 
+        name: daniel-rhoades.aws-security-groups
+      vars:
+        vpc_region: "{{ qdd_vpc.region }}",
+        vpc_id: "{{ vpc.vpc_id }}",
+        ec2_group_inbound_sg: "{{ qdd_vpc.security_group.inbound }}",
+        ec2_group_internal_inbound_sg_file: "{{ qdd_vpc.security_group.security_groups_file }}",
+        ec2_group_outbound_sg: "{{ qdd_vpc.security_group.outbound }}"
+
+    # Provision ECS with auto scaling EC2 instances
+  - name: Provision ECS with auto scaling
+      import_role: 
+        name: daniel-rhoades.aws-ecs-autoscale
+      vars:
+        ecs_cluster_name: "{{ cluster_name }}",
+        ec2_security_groups: [
+          "{{ ec2_group_internal_inbound_sg.results[0].group_id }}",
+          "{{ ec2_group_outbound_sg.results[0].group_id }}"
+          ],
+        ec2_asg_availability_zones: [
+          "{{ qdd_vpc.subnets[0].az }}"
+          ],
+        ec2_asg_vpc_subnets: [
+          "{{ vpc.subnets[0].id }}"
+          ],
+        vpc_name: "{{ qdd_vpc.name }}",
+        key_name: "{{ key_name }}"
+      }

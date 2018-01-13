@@ -1,0 +1,8 @@
+---
+  - name: Building Infrastructure
+    hosts: "{{ lookup('env', 'DEPLOY_ENV') }}"
+    vars:
+      environ: "{{ lookup('env', 'DEPLOY_ENV') }}"
+    roles:
+      - cluster
+      - task
