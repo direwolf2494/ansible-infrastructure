@@ -12,14 +12,17 @@
       file: production.yml
     when: environ == "prod"
 
+  # make the cluster name available in other roles
   - set_fact:
       cluster_name: "{{ cluster_name }}"
 
+  # check if the ssh key for this environment exists
   - name: Check if key file exists
     stat:
-      path: /etc/file.txt
+      path: "{{ keypath }}"
     register: stat_result
 
+  # create ssh key pair for environment
   - name: Creating ec2 key
     ec2_key:
       name: "{{ key_name }}"
@@ -44,7 +47,7 @@
       managed_policy:
       - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
 
-# tasks file for cluster
+  # provision networking
   - name: Provision Networking
     import_role: 
       name: daniel-rhoades.aws-qdd_vpc
